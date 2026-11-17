@@ -18,10 +18,10 @@ def parse_geos(geo: str) -> list[str]:
     codes = [part.strip().upper() for part in geo.replace(";", ",").split(",")]
     codes = [c for c in codes if c]
     if not codes:
-        raise ValueError("At least one geo code is required")
+        raise ValueError("Нужен хотя бы один geo-код")
     for code in codes:
         if len(code) != 2 or not code.isalpha():
-            raise ValueError(f"Invalid geo code: {code}")
+            raise ValueError(f"Некорректный geo-код: {code}")
     return codes
 
 
@@ -46,7 +46,7 @@ class CampaignService:
         geos = parse_geos(geo)
         full_name = normalize_campaign_name(name, self.settings.campaign_name_prefix)
 
-        # Ensure offer exists
+        # Проверяем, что оффер существует
         self.client.get_offer(offer_id)
 
         campaign_data = self.client.create_campaign(full_name)
@@ -104,7 +104,7 @@ class CampaignService:
                 campaign.offer_stream_id = int(stream["id"])
                 self.db.commit()
                 return campaign.offer_stream_id
-        raise KeitaroError("Offer stream not found for campaign")
+        raise KeitaroError("У кампании не найден поток офферов")
 
     def list_stream_offers(self, campaign: Campaign) -> list[dict]:
         stream_id = self.resolve_offer_stream_id(campaign)
@@ -118,7 +118,7 @@ class CampaignService:
                 offer = self.client.get_offer(offer_id)
                 name = offer.get("name")
             except KeitaroError:
-                name = f"Offer #{offer_id}"
+                name = f"Оффер #{offer_id}"
             result.append(
                 {
                     "offer_id": offer_id,
@@ -136,7 +136,7 @@ class CampaignService:
         current = list(stream.get("offers") or [])
         existing_ids = {int(o["offer_id"]) for o in current}
         if offer_id in existing_ids:
-            raise ValueError(f"Offer {offer_id} is already in the campaign")
+            raise ValueError(f"Оффер {offer_id} уже есть в кампании")
 
         offer_ids = [int(o["offer_id"]) for o in current] + [offer_id]
         shares = equal_shares(len(offer_ids))
@@ -153,9 +153,9 @@ class CampaignService:
         current = list(stream.get("offers") or [])
         remaining_ids = [int(o["offer_id"]) for o in current if int(o["offer_id"]) != offer_id]
         if len(remaining_ids) == len(current):
-            raise ValueError(f"Offer {offer_id} is not in the campaign")
+            raise ValueError(f"Оффера {offer_id} нет в кампании")
         if not remaining_ids:
-            raise ValueError("Cannot remove the last offer from the campaign")
+            raise ValueError("Нельзя удалить последний оффер из кампании")
 
         shares = equal_shares(len(remaining_ids))
         payload = [

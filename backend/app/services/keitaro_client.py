@@ -41,7 +41,7 @@ class KeitaroClient:
             except Exception:
                 body = response.text
             raise KeitaroError(
-                f"Keitaro {method} {path} failed: {response.status_code}",
+                f"Keitaro {method} {path} ошибка: {response.status_code}",
                 status_code=response.status_code,
                 body=body,
             )
@@ -62,7 +62,7 @@ class KeitaroClient:
             if q in str(o.get("name", "")).lower() or q in str(o.get("id", ""))
         ]
 
-        # GET /offers returns a truncated catalog; resolve numeric queries by id directly.
+        # GET /offers отдаёт урезанный каталог; числовой запрос резолвим через /offers/{id}.
         if q.isdigit():
             offer_id = int(q)
             if not any(int(o.get("id", -1)) == offer_id for o in matched):

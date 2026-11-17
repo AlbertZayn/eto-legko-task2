@@ -12,7 +12,11 @@ class OfferBrief(BaseModel):
 
 class CampaignCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    geo: str = Field(min_length=1, max_length=200, description="ISO country codes, comma-separated")
+    geo: str = Field(
+        min_length=1,
+        max_length=200,
+        description="ISO-коды стран через запятую",
+    )
     offer_id: int = Field(gt=0)
 
 

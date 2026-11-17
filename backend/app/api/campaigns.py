@@ -49,7 +49,7 @@ def get_campaign(
 ) -> CampaignDetailOut:
     campaign = service.get_local(campaign_id)
     if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
+        raise HTTPException(status_code=404, detail="Кампания не найдена")
     try:
         offers = service.list_stream_offers(campaign)
     except KeitaroError as exc:
@@ -72,7 +72,7 @@ def add_offer(
 ) -> list[StreamOfferOut]:
     campaign = service.get_local(campaign_id)
     if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
+        raise HTTPException(status_code=404, detail="Кампания не найдена")
     try:
         offers = service.add_offer(campaign, body.offer_id)
     except ValueError as exc:
@@ -93,7 +93,7 @@ def remove_offer(
 ) -> list[StreamOfferOut]:
     campaign = service.get_local(campaign_id)
     if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
+        raise HTTPException(status_code=404, detail="Кампания не найдена")
     try:
         offers = service.remove_offer(campaign, offer_id)
     except ValueError as exc:

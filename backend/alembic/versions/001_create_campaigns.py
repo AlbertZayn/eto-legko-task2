@@ -1,8 +1,8 @@
-"""create campaigns table
+"""создание таблицы campaigns
 
-Revision ID: 001
-Revises:
-Create Date: 2026-11-17
+ID ревизии: 001
+Родитель:
+Дата создания: 2026-11-17
 
 """
 

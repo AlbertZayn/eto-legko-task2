@@ -15,7 +15,9 @@ from app.services.keitaro_client import KeitaroClient, KeitaroError
 async def lifespan(app: FastAPI):
     settings = get_settings()
     if not settings.keitaro_api_key:
-        raise RuntimeError("KEITARO_API_KEY is not set. Copy .env.example to .env and fill it.")
+        raise RuntimeError(
+            "KEITARO_API_KEY не задан. Скопируйте .env.example в .env и заполните ключ."
+        )
     client = KeitaroClient(settings)
     app.state.keitaro = client
     try:
@@ -24,7 +26,7 @@ async def lifespan(app: FastAPI):
         client.close()
 
 
-app = FastAPI(title="Adrobot Keitaro Wrapper", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Adrobot — обёртка Keitaro", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

@@ -56,13 +56,13 @@ export function CreateCampaignPage() {
   return (
     <div className="page">
       <header className="page-header">
-        <h1>New campaign</h1>
+        <h1>Новая кампания</h1>
         <p className="muted">Создаватор Keitaro · префикс test_zaynullin_</p>
       </header>
 
       <form className="card form" onSubmit={onSubmit}>
         <label>
-          <span>Name</span>
+          <span>Название</span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -71,7 +71,7 @@ export function CreateCampaignPage() {
           />
         </label>
         <label>
-          <span>Geo</span>
+          <span>Гео</span>
           <input
             value={geo}
             onChange={(e) => setGeo(e.target.value)}
@@ -80,12 +80,12 @@ export function CreateCampaignPage() {
           />
         </label>
         <label>
-          <span>Offer</span>
+          <span>Оффер</span>
           <OfferAutocomplete value={offer} onChange={setOffer} />
         </label>
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={busy}>
-          {busy ? 'Creating…' : 'Create'}
+          {busy ? 'Создание…' : 'Создать'}
         </button>
       </form>
 

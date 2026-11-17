@@ -39,7 +39,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     try {
       detail = JSON.parse(detail as string)
     } catch {
-      /* keep text */
+      /* оставляем текст как есть */
     }
     throw new Error(
       typeof detail === 'object' && detail && 'detail' in detail

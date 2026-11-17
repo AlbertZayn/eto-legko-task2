@@ -11,7 +11,7 @@ router = APIRouter(prefix="/offers", tags=["offers"])
 
 @router.get("", response_model=list[OfferBrief])
 def search_offers(
-    q: str | None = Query(default=None, description="Search by name or id"),
+    q: str | None = Query(default=None, description="Поиск по имени или ID"),
     limit: int = Query(default=30, ge=1, le=100),
     client: KeitaroClient = Depends(get_keitaro_client),
 ) -> list[OfferBrief]:

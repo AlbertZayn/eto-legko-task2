@@ -79,13 +79,13 @@ export function CampaignEditorPage() {
         </p>
         <h1>{campaign.name}</h1>
         <p className="muted">
-          Keitaro #{campaign.keitaro_campaign_id} · geo {campaign.geo}
+          Keitaro #{campaign.keitaro_campaign_id} · гео {campaign.geo}
           {campaign.campaign_url ? (
             <>
               {' '}
               ·{' '}
               <a href={campaign.campaign_url} target="_blank" rel="noreferrer">
-                URL
+                ссылка
               </a>
             </>
           ) : null}
@@ -98,8 +98,8 @@ export function CampaignEditorPage() {
           <thead>
             <tr>
               <th>ID</th>
-              <th>Name</th>
-              <th>Share %</th>
+              <th>Название</th>
+              <th>Доля %</th>
               <th />
             </tr>
           </thead>
@@ -116,25 +116,25 @@ export function CampaignEditorPage() {
                     disabled={busy || offers.length <= 1}
                     onClick={() => void onRemove(o.offer_id)}
                   >
-                    Delete
+                    Удалить
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="muted">Сумма shares: {offers.reduce((s, o) => s + o.share, 0)}%</p>
+        <p className="muted">Сумма долей: {offers.reduce((s, o) => s + o.share, 0)}%</p>
       </section>
 
       <form className="card form" onSubmit={onAdd}>
         <h2>Добавить оффер</h2>
         <label>
-          <span>Offer</span>
+          <span>Оффер</span>
           <OfferAutocomplete value={selected} onChange={setSelected} />
         </label>
         {error && <p className="error">{error}</p>}
         <button type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Add offer'}
+          {busy ? 'Сохранение…' : 'Добавить оффер'}
         </button>
       </form>
     </div>
