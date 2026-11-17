@@ -1,0 +1,166 @@
+from __future__ import annotations
+
+from sqlalchemy.orm import Session
+
+from app.config import Settings
+from app.models.campaign import Campaign
+from app.services.keitaro_client import KeitaroClient, KeitaroError
+
+
+def normalize_campaign_name(name: str, prefix: str) -> str:
+    cleaned = name.strip()
+    if cleaned.startswith(prefix):
+        return cleaned
+    return f"{prefix}{cleaned}"
+
+
+def parse_geos(geo: str) -> list[str]:
+    codes = [part.strip().upper() for part in geo.replace(";", ",").split(",")]
+    codes = [c for c in codes if c]
+    if not codes:
+        raise ValueError("At least one geo code is required")
+    for code in codes:
+        if len(code) != 2 or not code.isalpha():
+            raise ValueError(f"Invalid geo code: {code}")
+    return codes
+
+
+def equal_shares(count: int) -> list[int]:
+    if count <= 0:
+        return []
+    base = 100 // count
+    shares = [base] * count
+    remainder = 100 - sum(shares)
+    for i in range(remainder):
+        shares[i] += 1
+    return shares
+
+
+class CampaignService:
+    def __init__(self, db: Session, client: KeitaroClient, settings: Settings):
+        self.db = db
+        self.client = client
+        self.settings = settings
+
+    def create(self, name: str, geo: str, offer_id: int) -> Campaign:
+        geos = parse_geos(geo)
+        full_name = normalize_campaign_name(name, self.settings.campaign_name_prefix)
+
+        # Ensure offer exists
+        self.client.get_offer(offer_id)
+
+        campaign_data = self.client.create_campaign(full_name)
+        campaign_id = int(campaign_data["id"])
+
+        try:
+            geo_stream = self.client.create_geo_google_stream(campaign_id, geos)
+            offer_stream = self.client.create_offers_stream(campaign_id, offer_id)
+        except KeitaroError:
+            raise
+
+        domain = campaign_data.get("domain") or ""
+        alias = campaign_data.get("alias") or ""
+        campaign_url = f"{domain.rstrip('/')}/{alias}" if domain and alias else ""
+
+        record = Campaign(
+            keitaro_campaign_id=campaign_id,
+            name=full_name,
+            alias=alias,
+            geo=",".join(geos),
+            offer_stream_id=int(offer_stream["id"]),
+            geo_stream_id=int(geo_stream["id"]),
+            campaign_url=campaign_url,
+        )
+        self.db.add(record)
+        self.db.commit()
+        self.db.refresh(record)
+        return record
+
+    def list_local(self) -> list[Campaign]:
+        return (
+            self.db.query(Campaign)
+            .order_by(Campaign.created_at.desc())
+            .all()
+        )
+
+    def get_local(self, local_id: int) -> Campaign | None:
+        return self.db.get(Campaign, local_id)
+
+    def get_local_by_keitaro(self, keitaro_id: int) -> Campaign | None:
+        return (
+            self.db.query(Campaign)
+            .filter(Campaign.keitaro_campaign_id == keitaro_id)
+            .first()
+        )
+
+    def resolve_offer_stream_id(self, campaign: Campaign) -> int:
+        if campaign.offer_stream_id:
+            return campaign.offer_stream_id
+        streams = self.client.get_campaign_streams(campaign.keitaro_campaign_id)
+        for stream in streams:
+            if stream.get("type") == "default" or (
+                stream.get("schema") == "landings" and stream.get("offers") is not None
+            ):
+                campaign.offer_stream_id = int(stream["id"])
+                self.db.commit()
+                return campaign.offer_stream_id
+        raise KeitaroError("Offer stream not found for campaign")
+
+    def list_stream_offers(self, campaign: Campaign) -> list[dict]:
+        stream_id = self.resolve_offer_stream_id(campaign)
+        stream = self.client.get_stream(stream_id)
+        offers = stream.get("offers") or []
+        result = []
+        for item in offers:
+            offer_id = int(item["offer_id"])
+            name = None
+            try:
+                offer = self.client.get_offer(offer_id)
+                name = offer.get("name")
+            except KeitaroError:
+                name = f"Offer #{offer_id}"
+            result.append(
+                {
+                    "offer_id": offer_id,
+                    "name": name,
+                    "share": int(item.get("share") or 0),
+                    "state": item.get("state") or "active",
+                }
+            )
+        return result
+
+    def add_offer(self, campaign: Campaign, offer_id: int) -> list[dict]:
+        self.client.get_offer(offer_id)
+        stream_id = self.resolve_offer_stream_id(campaign)
+        stream = self.client.get_stream(stream_id)
+        current = list(stream.get("offers") or [])
+        existing_ids = {int(o["offer_id"]) for o in current}
+        if offer_id in existing_ids:
+            raise ValueError(f"Offer {offer_id} is already in the campaign")
+
+        offer_ids = [int(o["offer_id"]) for o in current] + [offer_id]
+        shares = equal_shares(len(offer_ids))
+        payload = [
+            {"offer_id": oid, "share": share, "state": "active"}
+            for oid, share in zip(offer_ids, shares)
+        ]
+        self.client.update_stream_offers(stream_id, payload)
+        return self.list_stream_offers(campaign)
+
+    def remove_offer(self, campaign: Campaign, offer_id: int) -> list[dict]:
+        stream_id = self.resolve_offer_stream_id(campaign)
+        stream = self.client.get_stream(stream_id)
+        current = list(stream.get("offers") or [])
+        remaining_ids = [int(o["offer_id"]) for o in current if int(o["offer_id"]) != offer_id]
+        if len(remaining_ids) == len(current):
+            raise ValueError(f"Offer {offer_id} is not in the campaign")
+        if not remaining_ids:
+            raise ValueError("Cannot remove the last offer from the campaign")
+
+        shares = equal_shares(len(remaining_ids))
+        payload = [
+            {"offer_id": oid, "share": share, "state": "active"}
+            for oid, share in zip(remaining_ids, shares)
+        ]
+        self.client.update_stream_offers(stream_id, payload)
+        return self.list_stream_offers(campaign)
