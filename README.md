@@ -8,6 +8,12 @@ FastAPI + SQLAlchemy + React: создаватор кампаний и реда�
 
 Нужны Python 3.9+, Node 18+, доступ к https://tlgk.host/admin.
 
+UI: http://127.0.0.1:5173 · API: http://127.0.0.1:8000/docs · health: `/api/health`
+
+`.env` лежит **в корне** репо (рядом с этим файлом).
+
+### Первый запуск (пакеты ещё не установлены)
+
 ```bash
 git clone <url>
 cd eto-legko-task2
@@ -15,26 +21,53 @@ cp .env.example .env
 ```
 
 1. В админке: **Профиль → API ключи → Создать** → вставить ключ в `.env` (`KEITARO_API_KEY=...`).
-2. Backend:
+2. Backend (терминал 1):
 
 ```bash
 cd backend
-python3 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 alembic upgrade head
 uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-3. Frontend (второй терминал):
+3. Frontend (терминал 2):
 
 ```bash
 cd frontend
-npm install && npm run dev
+npm install
+npm run dev
 ```
 
-UI: http://127.0.0.1:5173 · API: http://127.0.0.1:8000/docs · health: `/api/health`
+### Повторный запуск (venv и node_modules уже есть)
 
-`.env` лежит **в корне** репо (рядом с этим файлом).
+Миграции и `pip` / `npm install` снова не нужны, если зависимости не менялись.
+
+1. Backend (терминал 1):
+
+```bash
+cd backend
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+2. Frontend (терминал 2):
+
+```bash
+cd frontend
+npm run dev
+```
+
+Если после `git pull` обновились зависимости:
+
+```bash
+# backend
+source .venv/bin/activate && pip install -r requirements.txt && alembic upgrade head
+
+# frontend
+cd frontend && npm install
+```
 
 ## Что проверить
 
