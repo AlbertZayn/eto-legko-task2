@@ -46,8 +46,8 @@ class CampaignService:
         geos = parse_geos(geo)
         full_name = normalize_campaign_name(name, self.settings.campaign_name_prefix)
 
-        # Проверяем, что оффер существует
-        self.client.get_offer(offer_id)
+        # Резолвим оффер (при ACL 403 всё равно можно повесить id на поток)
+        self.client.resolve_offer(offer_id)
 
         campaign_data = self.client.create_campaign(full_name)
         campaign_id = int(campaign_data["id"])
@@ -98,39 +98,95 @@ class CampaignService:
             return campaign.offer_stream_id
         streams = self.client.get_campaign_streams(campaign.keitaro_campaign_id)
         for stream in streams:
-            if stream.get("type") == "default" or (
-                stream.get("schema") == "landings" and stream.get("offers") is not None
-            ):
+            if self._is_offer_stream(stream):
                 campaign.offer_stream_id = int(stream["id"])
                 self.db.commit()
                 return campaign.offer_stream_id
         raise KeitaroError("У кампании не найден поток офферов")
 
-    def list_stream_offers(self, campaign: Campaign) -> list[dict]:
-        stream_id = self.resolve_offer_stream_id(campaign)
-        stream = self.client.get_stream(stream_id)
-        offers = stream.get("offers") or []
+    @staticmethod
+    def _is_offer_stream(stream: dict) -> bool:
+        if stream.get("type") == "default":
+            return True
+        if stream.get("schema") == "landings" and (stream.get("offers") is not None):
+            return True
+        name = str(stream.get("name") or "").lower()
+        return "offer" in name
+
+    def _enrich_offers(self, raw_offers: list[dict]) -> list[dict]:
         result = []
-        for item in offers:
+        for item in raw_offers:
             offer_id = int(item["offer_id"])
-            name = None
-            try:
-                offer = self.client.get_offer(offer_id)
-                name = offer.get("name")
-            except KeitaroError:
-                name = f"Оффер #{offer_id}"
+            offer = self.client.resolve_offer(offer_id)
             result.append(
                 {
                     "offer_id": offer_id,
-                    "name": name,
+                    "name": offer.get("name") or f"Оффер #{offer_id}",
                     "share": int(item.get("share") or 0),
-                    "state": item.get("state") or "active",
+                    "state": item.get("state") or offer.get("state") or "active",
+                    "group": offer.get("group"),
+                    "country": offer.get("country"),
+                    "affiliate_network": offer.get("affiliate_network"),
+                    "payout_type": offer.get("payout_type"),
+                    "payout_value": offer.get("payout_value"),
+                    "payout_currency": offer.get("payout_currency"),
                 }
             )
         return result
 
+    def list_streams(self, campaign: Campaign) -> list[dict]:
+        streams = self.client.get_campaign_streams(campaign.keitaro_campaign_id)
+        streams = sorted(streams, key=lambda s: int(s.get("position") or 0))
+        result = []
+        for stream in streams:
+            is_offer = self._is_offer_stream(stream)
+            if is_offer and not campaign.offer_stream_id:
+                campaign.offer_stream_id = int(stream["id"])
+                self.db.commit()
+
+            filters = []
+            for filt in stream.get("filters") or []:
+                payload = filt.get("payload") or []
+                if isinstance(payload, str):
+                    payload = [payload]
+                filters.append(
+                    {
+                        "name": str(filt.get("name") or ""),
+                        "mode": str(filt.get("mode") or ""),
+                        "payload": [str(p) for p in payload],
+                    }
+                )
+
+            offers = self._enrich_offers(stream.get("offers") or []) if is_offer else []
+            action_payload = stream.get("action_payload")
+            if action_payload is not None and not isinstance(action_payload, str):
+                action_payload = str(action_payload)
+
+            result.append(
+                {
+                    "id": int(stream["id"]),
+                    "name": str(stream.get("name") or f"Поток #{stream['id']}"),
+                    "type": str(stream.get("type") or ""),
+                    "stream_schema": str(stream.get("schema") or ""),
+                    "action_type": stream.get("action_type"),
+                    "action_payload": action_payload or None,
+                    "position": stream.get("position"),
+                    "state": stream.get("state"),
+                    "filters": filters,
+                    "offers": offers,
+                    "is_offer_stream": is_offer,
+                }
+            )
+        return result
+
+    def list_stream_offers(self, campaign: Campaign) -> list[dict]:
+        for stream in self.list_streams(campaign):
+            if stream.get("is_offer_stream"):
+                return list(stream.get("offers") or [])
+        return []
+
     def add_offer(self, campaign: Campaign, offer_id: int) -> list[dict]:
-        self.client.get_offer(offer_id)
+        self.client.resolve_offer(offer_id)
         stream_id = self.resolve_offer_stream_id(campaign)
         stream = self.client.get_stream(stream_id)
         current = list(stream.get("offers") or [])
@@ -145,7 +201,7 @@ class CampaignService:
             for oid, share in zip(offer_ids, shares)
         ]
         self.client.update_stream_offers(stream_id, payload)
-        return self.list_stream_offers(campaign)
+        return self.list_streams(campaign)
 
     def remove_offer(self, campaign: Campaign, offer_id: int) -> list[dict]:
         stream_id = self.resolve_offer_stream_id(campaign)
@@ -163,4 +219,4 @@ class CampaignService:
             for oid, share in zip(remaining_ids, shares)
         ]
         self.client.update_stream_offers(stream_id, payload)
-        return self.list_stream_offers(campaign)
+        return self.list_streams(campaign)

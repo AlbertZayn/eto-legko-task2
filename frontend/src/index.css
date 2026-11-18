@@ -46,6 +46,86 @@ a:hover {
   gap: 1.25rem;
 }
 
+.page-wide {
+  width: min(960px, calc(100% - 2rem));
+}
+
+.section-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.streams {
+  display: grid;
+  gap: 1rem;
+}
+
+.stream-card {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.stream-card-compact {
+  padding: 0.85rem 1rem;
+  gap: 0;
+}
+
+.stream-compact-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.75rem;
+  font-size: 0.95rem;
+}
+
+.stream-compact-row strong {
+  flex: none;
+}
+
+.stream-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.stream-head h2 {
+  margin: 0 0 0.35rem;
+}
+
+.stream-summary {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.stream-badge {
+  flex: none;
+  border-radius: 999px;
+  padding: 0.25rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #ece7de;
+  color: var(--muted);
+}
+
+.stream-badge.offer {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.stream-body {
+  display: grid;
+  gap: 0.55rem;
+}
+
+code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.85em;
+  background: #f3eee4;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+}
+
 .page-header h1 {
   margin: 0.2rem 0;
   font-family: "IBM Plex Serif", Georgia, serif;
@@ -200,6 +280,33 @@ button.danger {
 
 .autocomplete-list li button:hover {
   background: var(--accent-soft);
+}
+
+.autocomplete-list .error-inline {
+  color: var(--danger);
+  padding: 0.55rem 0.65rem;
+  font-size: 0.85rem;
+}
+
+.offer-option {
+  display: grid !important;
+  gap: 0.15rem;
+  line-height: 1.3;
+}
+
+.offer-option-title {
+  font-weight: 600;
+}
+
+.offer-option-meta,
+.offer-selected-meta {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.offer-selected-meta {
+  margin: 0.35rem 0 0;
 }
 
 .offers-table {

@@ -1,6 +1,15 @@
 export type OfferBrief = {
   id: number
   name: string
+  group?: string | null
+  country?: string | null
+  affiliate_network?: string | null
+  payout_type?: string | null
+  payout_value?: number | null
+  payout_currency?: string | null
+  state?: string | null
+  offer_type?: string | null
+  preview_path?: string | null
 }
 
 export type Campaign = {
@@ -20,10 +29,76 @@ export type StreamOffer = {
   name: string | null
   share: number
   state: string
+  group?: string | null
+  country?: string | null
+  affiliate_network?: string | null
+  payout_type?: string | null
+  payout_value?: number | null
+  payout_currency?: string | null
+}
+
+export type StreamFilter = {
+  name: string
+  mode: string
+  payload: string[]
+}
+
+export type CampaignStream = {
+  id: number
+  name: string
+  type: string
+  stream_schema: string
+  action_type: string | null
+  action_payload: string | null
+  position: number | null
+  state: string | null
+  filters: StreamFilter[]
+  offers: StreamOffer[]
+  is_offer_stream: boolean
 }
 
 export type CampaignDetail = Campaign & {
-  offers: StreamOffer[]
+  streams: CampaignStream[]
+}
+
+export function formatOfferMeta(offer: {
+  group?: string | null
+  country?: string | null
+  affiliate_network?: string | null
+  payout_type?: string | null
+  payout_value?: number | null
+  payout_currency?: string | null
+  state?: string | null
+  offer_type?: string | null
+}): string {
+  const parts: string[] = []
+  if (offer.group) parts.push(offer.group)
+  if (offer.country) parts.push(offer.country)
+  if (offer.affiliate_network) parts.push(`сеть ${offer.affiliate_network}`)
+  if (offer.payout_type) {
+    const money =
+      offer.payout_value != null
+        ? `${offer.payout_value}${offer.payout_currency ? ` ${offer.payout_currency}` : ''}`
+        : null
+    parts.push(money ? `${offer.payout_type} ${money}` : offer.payout_type)
+  }
+  if (offer.offer_type) parts.push(offer.offer_type)
+  if (offer.state && offer.state !== 'active') parts.push(offer.state)
+  return parts.join(' · ')
+}
+
+export function formatStreamSummary(stream: CampaignStream): string {
+  const parts: string[] = []
+  parts.push(`${stream.type} / ${stream.stream_schema}`)
+  if (stream.action_payload) parts.push(`→ ${stream.action_payload}`)
+  for (const filt of stream.filters) {
+    const payload = filt.payload.length ? filt.payload.join(', ') : '—'
+    parts.push(`${filt.name} ${filt.mode} ${payload}`)
+  }
+  if (stream.is_offer_stream) {
+    parts.push(`офферов: ${stream.offers.length}`)
+  }
+  return parts.join(' · ')
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -53,10 +128,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
-export function searchOffers(q: string): Promise<OfferBrief[]> {
+export function searchOffers(q: string = '', init?: RequestInit): Promise<OfferBrief[]> {
   const params = new URLSearchParams()
-  if (q.trim()) params.set('q', q.trim())
-  return request(`/api/offers?${params.toString()}`)
+  const trimmed = String(q ?? '').trim()
+  if (trimmed) params.set('q', trimmed)
+  const qs = params.toString()
+  return request(qs ? `/api/offers?${qs}` : '/api/offers', init)
 }
 
 export function listCampaigns(): Promise<Campaign[]> {
@@ -78,14 +155,14 @@ export function getCampaign(id: number): Promise<CampaignDetail> {
   return request(`/api/campaigns/${id}`)
 }
 
-export function addOffer(campaignId: number, offerId: number): Promise<StreamOffer[]> {
+export function addOffer(campaignId: number, offerId: number): Promise<CampaignDetail> {
   return request(`/api/campaigns/${campaignId}/offers`, {
     method: 'POST',
     body: JSON.stringify({ offer_id: offerId }),
   })
 }
 
-export function removeOffer(campaignId: number, offerId: number): Promise<StreamOffer[]> {
+export function removeOffer(campaignId: number, offerId: number): Promise<CampaignDetail> {
   return request(`/api/campaigns/${campaignId}/offers/${offerId}`, {
     method: 'DELETE',
   })

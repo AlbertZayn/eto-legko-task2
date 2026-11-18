@@ -29,6 +29,7 @@ class KeitaroClient:
             },
             timeout=60.0,
         )
+        self._offer_group_names: dict[int, str] | None = None
 
     def close(self) -> None:
         self._client.close()
@@ -49,27 +50,154 @@ class KeitaroClient:
             return None
         return response.json()
 
-    def list_offers(self, query: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+    def offer_group_names(self) -> dict[int, str]:
+        if self._offer_group_names is not None:
+            return self._offer_group_names
+        try:
+            groups = self._request("GET", "/groups", params={"type": "offers"})
+        except KeitaroError:
+            self._offer_group_names = {}
+            return self._offer_group_names
+        if not isinstance(groups, list):
+            self._offer_group_names = {}
+            return self._offer_group_names
+        result: dict[int, str] = {}
+        for group in groups:
+            try:
+                result[int(group["id"])] = str(group.get("name") or group["id"])
+            except (KeyError, TypeError, ValueError):
+                continue
+        self._offer_group_names = result
+        return result
+
+    def normalize_offer(
+        self,
+        item: dict[str, Any],
+        group_names: dict[int, str] | None = None,
+    ) -> dict[str, Any]:
+        """Привести ответ Keitaro к полям для автокомплита/таблицы."""
+        try:
+            oid = int(item["id"] if "id" in item else item["offer_id"])
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("offer without id") from None
+
+        country = item.get("country") or []
+        if isinstance(country, str):
+            country_label = country
+        elif isinstance(country, list):
+            country_label = ", ".join(str(c) for c in country if c)
+        else:
+            country_label = ""
+
+        payout_value = item.get("payout_value")
+        try:
+            payout_value = float(payout_value) if payout_value is not None else None
+        except (TypeError, ValueError):
+            payout_value = None
+
+        group_id = item.get("group_id")
+        try:
+            group_id_int = int(group_id) if group_id is not None else None
+        except (TypeError, ValueError):
+            group_id_int = None
+
+        group_label = item.get("group") or None
+        if not group_label and group_id_int is not None and group_names:
+            group_label = group_names.get(group_id_int)
+
+        network_id = item.get("affiliate_network_id")
+        network_label = (
+            str(item["affiliate_network"])
+            if item.get("affiliate_network") not in (None, "")
+            else None
+        )
+        if not network_label and network_id not in (None, "", 0):
+            network_label = str(network_id)
+
+        name = str(item.get("name") or f"Оффер #{oid}")
+        return {
+            "id": oid,
+            "name": name,
+            "group": group_label,
+            "group_id": group_id_int,
+            "country": country_label or None,
+            "affiliate_network": network_label,
+            "affiliate_network_id": network_id,
+            "payout_type": item.get("payout_type") or None,
+            "payout_value": payout_value,
+            "payout_currency": item.get("payout_currency") or None,
+            "state": item.get("state") or None,
+            "offer_type": item.get("offer_type") or None,
+            "preview_path": item.get("preview_path") or None,
+        }
+
+    def resolve_offer(self, offer_id: int) -> dict[str, Any]:
+        """Вернуть оффер; при 403/прочих ограничениях ACL — заглушка с ID (в поток всё ещё можно добавить)."""
+        group_names = self.offer_group_names()
+        try:
+            return self.normalize_offer(self.get_offer(offer_id), group_names=group_names)
+        except KeitaroError as exc:
+            if exc.status_code in (403, 404):
+                return self.normalize_offer(
+                    {"id": offer_id, "name": f"Оффер #{offer_id}"},
+                    group_names=group_names,
+                )
+            raise
+
+    def list_offers(
+        self,
+        query: str | None = None,
+        limit: int = 50,
+        extra_offers: list[dict[str, Any]] | None = None,
+    ) -> list[dict[str, Any]]:
         data = self._request("GET", "/offers")
-        offers = data if isinstance(data, list) else data.get("rows", data.get("data", []))
-        if not query:
+        raw = data if isinstance(data, list) else data.get("rows", data.get("data", []))
+        group_names = self.offer_group_names()
+        by_id: dict[int, dict[str, Any]] = {}
+        for item in list(raw) + list(extra_offers or []):
+            try:
+                normalized = self.normalize_offer(item, group_names=group_names)
+            except ValueError:
+                continue
+            oid = int(normalized["id"])
+            prev = by_id.get(oid)
+            # предпочитаем запись с нормальным именем и метаданными, не заглушку
+            prev_stub = not prev or str(prev.get("name", "")).startswith("Оффер #")
+            new_stub = str(normalized.get("name", "")).startswith("Оффер #")
+            richer = bool(normalized.get("group") or normalized.get("country"))
+            if prev is None or (prev_stub and not new_stub) or (prev_stub and richer):
+                by_id[oid] = normalized
+        offers = list(by_id.values())
+
+        if not query or not query.strip():
+            offers.sort(key=lambda o: int(o["id"]), reverse=True)
             return offers[:limit]
 
         q = query.lower().strip()
-        matched = [
-            o
-            for o in offers
-            if q in str(o.get("name", "")).lower() or q in str(o.get("id", ""))
-        ]
 
-        # GET /offers отдаёт урезанный каталог; числовой запрос резолвим через /offers/{id}.
-        if q.isdigit():
+        def matches(o: dict[str, Any]) -> bool:
+            hay = " ".join(
+                str(part)
+                for part in (
+                    o.get("id"),
+                    o.get("name"),
+                    o.get("group"),
+                    o.get("country"),
+                    o.get("affiliate_network"),
+                    o.get("payout_type"),
+                    o.get("state"),
+                )
+                if part not in (None, "")
+            ).lower()
+            return q in hay
+
+        matched = [o for o in offers if matches(o)]
+
+        # Полный числовой ID (обычно 4+ цифр): прямой lookup даже при ACL 403 на GET.
+        if q.isdigit() and len(q) >= 4:
             offer_id = int(q)
             if not any(int(o.get("id", -1)) == offer_id for o in matched):
-                try:
-                    matched.insert(0, self.get_offer(offer_id))
-                except KeitaroError:
-                    pass
+                matched.insert(0, self.resolve_offer(offer_id))
 
         return matched[:limit]
 

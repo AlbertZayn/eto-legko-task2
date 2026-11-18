@@ -3,7 +3,9 @@ from app.schemas.campaign import (
     CampaignDetailOut,
     CampaignOut,
     OfferBrief,
+    StreamFilterOut,
     StreamOfferOut,
+    StreamOut,
 )
 
 __all__ = [
@@ -11,5 +13,7 @@ __all__ = [
     "CampaignDetailOut",
     "CampaignOut",
     "OfferBrief",
+    "StreamFilterOut",
     "StreamOfferOut",
+    "StreamOut",
 ]

@@ -8,7 +8,7 @@ from app.schemas.campaign import (
     CampaignCreateRequest,
     CampaignDetailOut,
     CampaignOut,
-    StreamOfferOut,
+    StreamOut,
 )
 from app.services.campaigns import CampaignService
 from app.services.keitaro_client import KeitaroError
@@ -18,6 +18,14 @@ router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
 class AddOfferRequest(BaseModel):
     offer_id: int = Field(gt=0)
+
+
+def _detail(campaign, streams: list[dict]) -> CampaignDetailOut:
+    base = CampaignOut.model_validate(campaign)
+    return CampaignDetailOut(
+        **base.model_dump(),
+        streams=[StreamOut(**s) for s in streams],
+    )
 
 
 @router.get("", response_model=list[CampaignOut])
@@ -51,30 +59,26 @@ def get_campaign(
     if not campaign:
         raise HTTPException(status_code=404, detail="Кампания не найдена")
     try:
-        offers = service.list_stream_offers(campaign)
+        streams = service.list_streams(campaign)
     except KeitaroError as exc:
         raise HTTPException(
             status_code=exc.status_code or 502,
             detail={"message": str(exc), "keitaro": exc.body},
         ) from exc
-    base = CampaignOut.model_validate(campaign)
-    return CampaignDetailOut(
-        **base.model_dump(),
-        offers=[StreamOfferOut(**o) for o in offers],
-    )
+    return _detail(campaign, streams)
 
 
-@router.post("/{campaign_id}/offers", response_model=list[StreamOfferOut])
+@router.post("/{campaign_id}/offers", response_model=CampaignDetailOut)
 def add_offer(
     campaign_id: int,
     body: AddOfferRequest,
     service: CampaignService = Depends(get_campaign_service),
-) -> list[StreamOfferOut]:
+) -> CampaignDetailOut:
     campaign = service.get_local(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Кампания не найдена")
     try:
-        offers = service.add_offer(campaign, body.offer_id)
+        streams = service.add_offer(campaign, body.offer_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except KeitaroError as exc:
@@ -82,20 +86,20 @@ def add_offer(
             status_code=exc.status_code or 502,
             detail={"message": str(exc), "keitaro": exc.body},
         ) from exc
-    return [StreamOfferOut(**o) for o in offers]
+    return _detail(campaign, streams)
 
 
-@router.delete("/{campaign_id}/offers/{offer_id}", response_model=list[StreamOfferOut])
+@router.delete("/{campaign_id}/offers/{offer_id}", response_model=CampaignDetailOut)
 def remove_offer(
     campaign_id: int,
     offer_id: int,
     service: CampaignService = Depends(get_campaign_service),
-) -> list[StreamOfferOut]:
+) -> CampaignDetailOut:
     campaign = service.get_local(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Кампания не найдена")
     try:
-        offers = service.remove_offer(campaign, offer_id)
+        streams = service.remove_offer(campaign, offer_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except KeitaroError as exc:
@@ -103,4 +107,4 @@ def remove_offer(
             status_code=exc.status_code or 502,
             detail={"message": str(exc), "keitaro": exc.body},
         ) from exc
-    return [StreamOfferOut(**o) for o in offers]
+    return _detail(campaign, streams)
