@@ -97,6 +97,7 @@ class KeitaroClient:
             "cost_currency": "USD",
             "cost_auto": True,
             "state": "active",
+            "notes": self.settings.campaign_notes_marker,
         }
         return self._request("POST", "/campaigns", json=payload)
 
@@ -104,7 +105,7 @@ class KeitaroClient:
         payload = {
             "campaign_id": campaign_id,
             "type": "regular",
-            "name": "Geo -> Google",
+            "name": "zaynullin · Geo → Google",
             "schema": "redirect",
             "action_type": "http",
             "action_payload": "https://google.com/",
@@ -127,7 +128,7 @@ class KeitaroClient:
         payload = {
             "campaign_id": campaign_id,
             "type": "default",
-            "name": "Offers",
+            "name": "zaynullin · Offers",
             "schema": "landings",
             "action_type": "http",
             "action_payload": "",

@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     keitaro_source_id: int = 836
     database_url: str = "sqlite:///./adrobot.db"
     campaign_name_prefix: str = "test_zaynullin_"
+    # Метка в заметках кампании Keitaro — чтобы найти сдачу среди чужих test_*
+    campaign_notes_marker: str = (
+        "Adrobot by Zaynullin | FastAPI+React | repo eto-legko-task2"
+    )
 
 
 @lru_cache
