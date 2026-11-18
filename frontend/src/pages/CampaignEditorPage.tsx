@@ -136,6 +136,9 @@ function StreamCard({
   busy,
   pending,
   pendingOfferIds,
+  selected,
+  onSelectedChange,
+  onAdd,
   onRemove,
   onBringBack,
   onTogglePin,
@@ -144,6 +147,9 @@ function StreamCard({
   busy: boolean
   pending: boolean
   pendingOfferIds: Set<number>
+  selected: OfferBrief | null
+  onSelectedChange: (offer: OfferBrief | null) => void
+  onAdd: (e: FormEvent) => void
   onRemove: (offerId: number) => void
   onBringBack: (offerId: number) => void
   onTogglePin: (offerId: number) => void
@@ -282,6 +288,20 @@ function StreamCard({
             </p>
           </>
         )}
+
+        <form className="offer-add-row" onSubmit={onAdd}>
+          <label className="offer-add-field">
+            <span className="visually-hidden">Добавить оффер</span>
+            <OfferAutocomplete
+              value={selected}
+              onChange={onSelectedChange}
+              placeholder="Добавить оффер…"
+            />
+          </label>
+          <button type="submit" className="offer-add-btn" disabled={busy}>
+            Добавить
+          </button>
+        </form>
       </div>
     </section>
   )
@@ -374,11 +394,6 @@ export function CampaignEditorPage() {
       return (a.position ?? 0) - (b.position ?? 0)
     })
   }, [campaign, workingOffers])
-
-  const offerStream = useMemo(
-    () => displayStreams.find((s) => s.is_offer_stream) || null,
-    [displayStreams],
-  )
 
   const onFetchStreams = async () => {
     setFetching(true)
@@ -579,6 +594,9 @@ export function CampaignEditorPage() {
               busy={busy || fetching}
               pending={pending && stream.is_offer_stream}
               pendingOfferIds={pendingOfferIds}
+              selected={selected}
+              onSelectedChange={setSelected}
+              onAdd={onAdd}
               onRemove={onRemove}
               onBringBack={onBringBack}
               onTogglePin={onTogglePin}
@@ -586,22 +604,6 @@ export function CampaignEditorPage() {
           ))
         )}
       </section>
-
-      {offerStream && (
-        <form className="card form" onSubmit={onAdd}>
-          <h2>Добавить оффер в «{offerStream.name}»</h2>
-          <p className="muted">
-            Добавление и удаление — в черновик. В Keitaro поток обновится после Push to KT.
-          </p>
-          <label>
-            <span>Оффер</span>
-            <OfferAutocomplete value={selected} onChange={setSelected} />
-          </label>
-          <button type="submit" disabled={busy || fetching}>
-            Добавить оффер
-          </button>
-        </form>
-      )}
     </div>
   )
 }
