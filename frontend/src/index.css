@@ -7,6 +7,8 @@
   --line: #d9d2c6;
   --accent: #1f6f5b;
   --accent-soft: #d7efe7;
+  --pending: #e8efe6;
+  --pending-new: #dfece3;
   --danger: #a33b2d;
   --danger-soft: #f7e2de;
   --shadow: 0 10px 30px rgba(28, 26, 23, 0.08);
@@ -162,11 +164,23 @@ code {
   margin: 0;
 }
 
+.section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 button.ghost {
   background: transparent;
   color: var(--accent);
   border: 1px solid var(--line);
   padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.section-actions button {
+  padding: 0.35rem 0.75rem;
   font-size: 0.85rem;
 }
 
@@ -327,4 +341,73 @@ button.danger {
   font-size: 0.8rem;
   color: var(--muted);
   font-weight: 600;
+}
+
+.offers-table tr.offer-row-pending td {
+  background: var(--pending);
+}
+
+.offers-table tr.offer-row-new td {
+  background: var(--pending-new);
+}
+
+.offers-table tr.offer-row-pending td:first-child,
+.offers-table tr.offer-row-new td:first-child {
+  box-shadow: inset 3px 0 0 rgba(31, 111, 91, 0.35);
+}
+
+.offers-table tr.offer-row-disabled td {
+  background: transparent;
+  color: rgba(107, 100, 92, 0.45);
+}
+
+.offers-table tr.offer-row-disabled td .muted,
+.offers-table tr.offer-row-disabled .offer-option-meta {
+  color: rgba(107, 100, 92, 0.4);
+}
+
+.offers-table tr.offer-row-disabled button.danger {
+  opacity: 0.45;
+}
+
+.offer-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.offer-row-actions button {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.8rem;
+}
+
+.share-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.pin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid transparent;
+}
+
+.pin-btn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pin-btn.pinned {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: rgba(31, 111, 91, 0.25);
 }

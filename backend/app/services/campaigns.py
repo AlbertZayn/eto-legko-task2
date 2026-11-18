@@ -185,38 +185,67 @@ class CampaignService:
                 return list(stream.get("offers") or [])
         return []
 
-    def add_offer(self, campaign: Campaign, offer_id: int) -> list[dict]:
-        self.client.resolve_offer(offer_id)
-        stream_id = self.resolve_offer_stream_id(campaign)
-        stream = self.client.get_stream(stream_id)
-        current = list(stream.get("offers") or [])
-        existing_ids = {int(o["offer_id"]) for o in current}
-        if offer_id in existing_ids:
-            raise ValueError(f"Оффер {offer_id} уже есть в кампании")
+    def push_offers(
+        self,
+        campaign: Campaign,
+        offers: list[dict] | list[int],
+    ) -> list[dict]:
+        """Публикует состав офферов в Keitaro (единственная точка записи потока офферов)."""
+        cleaned: list[dict] = []
+        seen: set[int] = set()
+        for item in offers:
+            if isinstance(item, int):
+                oid, share = int(item), None
+            else:
+                oid = int(item["offer_id"])
+                raw_share = item.get("share")
+                share = int(raw_share) if raw_share is not None else None
+            if oid <= 0:
+                raise ValueError(f"Некорректный offer_id: {oid}")
+            if oid in seen:
+                continue
+            seen.add(oid)
+            cleaned.append({"offer_id": oid, "share": share})
+        if not cleaned:
+            raise ValueError("Нужен хотя бы один оффер для публикации")
 
-        offer_ids = [int(o["offer_id"]) for o in current] + [offer_id]
-        shares = equal_shares(len(offer_ids))
+        for item in cleaned:
+            self.client.resolve_offer(int(item["offer_id"]))
+
+        if any(item["share"] is None for item in cleaned):
+            shares = equal_shares(len(cleaned))
+            for item, share in zip(cleaned, shares):
+                item["share"] = share
+        else:
+            total = sum(int(item["share"]) for item in cleaned)
+            if total != 100:
+                raise ValueError(f"Сумма долей должна быть 100%, сейчас {total}%")
+
+        stream_id = self.resolve_offer_stream_id(campaign)
         payload = [
-            {"offer_id": oid, "share": share, "state": "active"}
-            for oid, share in zip(offer_ids, shares)
+            {"offer_id": int(item["offer_id"]), "share": int(item["share"]), "state": "active"}
+            for item in cleaned
         ]
         self.client.update_stream_offers(stream_id, payload)
         return self.list_streams(campaign)
+
+    def add_offer(self, campaign: Campaign, offer_id: int) -> list[dict]:
+        """Сразу пишет в KT (legacy). Предпочтительнее draft на клиенте + push_offers."""
+        stream_id = self.resolve_offer_stream_id(campaign)
+        stream = self.client.get_stream(stream_id)
+        current = [int(o["offer_id"]) for o in (stream.get("offers") or [])]
+        if offer_id in current:
+            raise ValueError(f"Оффер {offer_id} уже есть в кампании")
+        return self.push_offers(campaign, current + [offer_id])
 
     def remove_offer(self, campaign: Campaign, offer_id: int) -> list[dict]:
+        """Сразу пишет в KT (legacy). Предпочтительнее draft на клиенте + push_offers."""
         stream_id = self.resolve_offer_stream_id(campaign)
         stream = self.client.get_stream(stream_id)
-        current = list(stream.get("offers") or [])
-        remaining_ids = [int(o["offer_id"]) for o in current if int(o["offer_id"]) != offer_id]
-        if len(remaining_ids) == len(current):
+        current = [int(o["offer_id"]) for o in (stream.get("offers") or [])]
+        if offer_id not in current:
             raise ValueError(f"Оффера {offer_id} нет в кампании")
-        if not remaining_ids:
+        remaining = [oid for oid in current if oid != offer_id]
+        if not remaining:
             raise ValueError("Нельзя удалить последний оффер из кампании")
-
-        shares = equal_shares(len(remaining_ids))
-        payload = [
-            {"offer_id": oid, "share": share, "state": "active"}
-            for oid, share in zip(remaining_ids, shares)
-        ]
-        self.client.update_stream_offers(stream_id, payload)
-        return self.list_streams(campaign)
+        return self.push_offers(campaign, remaining)

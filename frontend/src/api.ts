@@ -29,6 +29,8 @@ export type StreamOffer = {
   name: string | null
   share: number
   state: string
+  /** Локально: доля зафиксирована и не пересчитывается. */
+  share_pinned?: boolean
   group?: string | null
   country?: string | null
   affiliate_network?: string | null
@@ -155,15 +157,79 @@ export function getCampaign(id: number): Promise<CampaignDetail> {
   return request(`/api/campaigns/${id}`)
 }
 
-export function addOffer(campaignId: number, offerId: number): Promise<CampaignDetail> {
-  return request(`/api/campaigns/${campaignId}/offers`, {
+export function fetchStreamsFromKt(campaignId: number): Promise<CampaignDetail> {
+  return request(`/api/campaigns/${campaignId}/streams/fetch`, {
     method: 'POST',
-    body: JSON.stringify({ offer_id: offerId }),
   })
 }
 
-export function removeOffer(campaignId: number, offerId: number): Promise<CampaignDetail> {
-  return request(`/api/campaigns/${campaignId}/offers/${offerId}`, {
-    method: 'DELETE',
+export function pushOffersToKt(
+  campaignId: number,
+  offers: { offer_id: number; share: number }[],
+): Promise<CampaignDetail> {
+  return request(`/api/campaigns/${campaignId}/offers/push`, {
+    method: 'POST',
+    body: JSON.stringify({ offers }),
   })
+}
+
+/** Равномерно распределить total процентов на count частей. */
+export function equalSharesOf(total: number, count: number): number[] {
+  if (count <= 0) return []
+  if (total <= 0) return Array.from({ length: count }, () => 0)
+  const base = Math.floor(total / count)
+  const shares = Array.from({ length: count }, () => base)
+  let remainder = total - base * count
+  for (let i = 0; remainder > 0; i += 1, remainder -= 1) {
+    shares[i] += 1
+  }
+  return shares
+}
+
+/** Равные доли на 100% (как на бэкенде). */
+export function equalShares(count: number): number[] {
+  return equalSharesOf(100, count)
+}
+
+export function isOfferActive(offer: Pick<StreamOffer, 'state'>): boolean {
+  const state = String(offer.state || 'active').toLowerCase()
+  return state !== 'disabled' && state !== 'inactive'
+}
+
+/**
+ * Пересчёт долей: pinned active сохраняют share,
+ * оставшиеся % делятся между unpinned active; disabled → 0.
+ */
+export function withEqualShares(offers: StreamOffer[]): StreamOffer[] {
+  const pinnedSum = offers
+    .filter((o) => isOfferActive(o) && o.share_pinned)
+    .reduce((sum, o) => sum + Math.max(0, Math.round(o.share)), 0)
+  const remainder = Math.max(0, 100 - pinnedSum)
+  const unpinnedCount = offers.filter((o) => isOfferActive(o) && !o.share_pinned).length
+  const freeShares = equalSharesOf(remainder, unpinnedCount)
+  let freeIndex = 0
+
+  return offers.map((offer) => {
+    if (!isOfferActive(offer)) {
+      return { ...offer, share: 0, state: 'disabled' }
+    }
+    if (offer.share_pinned) {
+      return {
+        ...offer,
+        share: Math.max(0, Math.round(offer.share)),
+        state: 'active',
+        share_pinned: true,
+      }
+    }
+    const share = freeShares[freeIndex] ?? 0
+    freeIndex += 1
+    return { ...offer, share, state: 'active', share_pinned: false }
+  })
+}
+
+export function offersFingerprint(offers: StreamOffer[]): string {
+  // pin — локальный флаг, в pending/KT не входит
+  return offers
+    .map((o) => `${o.offer_id}:${isOfferActive(o) ? 'a' : 'd'}:${isOfferActive(o) ? o.share : 0}`)
+    .join('|')
 }
